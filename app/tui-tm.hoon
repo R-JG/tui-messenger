@@ -1,23 +1,24 @@
-/-  homunculus
+/-  homunculus, tlon-chat=chat, tlon-channels=channels
 |%
-+$  channels  (list channel)
+::
++$  tlon-dms    (map ship dm:tlon-chat)
++$  tlon-clubs  (map id:club:tlon-chat club:tlon-chat)
+::
++$  id  [ship=@p name=@t]
 +$  channel
-  $:  name=@t
-      =channel-messages
+  $:  =id
+      =posts:tlon-channels
   ==
-+$  channel-messages  (list channel-message)
-+$  channel-message
-  $:  replies=(list message)
-      message
++$  channels  (list channel)
++$  group
+  $:  =channels
   ==
-+$  message
-  $:  =ship
-      data=@t
-  ==
++$  groups  (map id group)
 +$  state
-  $:  active-channel=@
-      active-replies=(unit @)
-      =channels
+  $:  active-group=$@(~ id)
+      active-channel=@
+      active-replies=(unit id-post:tlon-channels)
+      =groups
   ==
 +$  card  card:agent:gall
 --
@@ -30,10 +31,7 @@
 +*  this  .
 ++  on-init
   ^-  (quip card _this)
-  =.  channels
-    :~  init-channel--internet-cafe
-        init-channel--support
-    ==
+  =.  groups  (init-groups-state bol)
   :_  this
   :~  ~(full-update tui bol)
       ~(register tui bol)
@@ -44,10 +42,7 @@
 ++  on-load
   |=  old=vase
   ^-  (quip card _this)
-  =.  channels
-    :~  init-channel--internet-cafe
-        init-channel--support
-    ==
+  =.  groups  (init-groups-state bol)
   :_  this
   :~  ~(full-update tui bol)
       ~(register tui bol)
@@ -76,6 +71,21 @@
         %act
       ?+  p.eve  !!
         ::
+          [%deselect-group ~]
+        =:  active-group    ~
+            active-channel  ~
+            active-replies  ~
+          ==
+        :_  this
+        :~  ~(full-update tui bol)
+        ==
+        ::
+          [%change-group @ta @ta ~]
+        =.  active-group  [(slav %p i.t.p.eve) i.t.t.p.eve]
+        :_  this
+        :~  ~(full-update tui bol)
+        ==
+        ::
           [%change-channel @ta ~]
         =:  active-channel  (slav %ud i.t.p.eve)
             active-replies  ~
@@ -85,12 +95,12 @@
         ==
         ::
           [%open-replies @ta ~]
-        =.  active-replies  [~ (slav %ud i.t.p.eve)]
+        =.  active-replies  [~ (slav %da i.t.p.eve)]
         :_  this
         :~  ~(full-update tui bol)
         ==
         ::
-          [%close-replies @ta ~]
+          [%close-replies ~]
         =.  active-replies  ~
         :_  this
         :~  ~(full-update tui bol)
@@ -102,19 +112,20 @@
       ?+  p.eve  !!
         ::
           [%channel-form ~]
-        =/  data=@t       (~(got by q.eve) /channel-input)
-        =/  chan=channel  (snag active-channel channels)
-        =.  channel-messages.chan
-          %+  snoc  channel-messages.chan
-          =|  msg=channel-message
-          %_  msg
-            ship  our.bol
-            data  data
-          ==
-        =.  channels  (snap channels active-channel chan)
-        :_  this
-        :~  ~(post-message-update tui bol)
-        ==
+        [~ this]
+        :: =/  data=@t       (~(got by q.eve) /channel-input)
+        :: =/  chan=channel  (snag active-channel channels)
+        :: =.  channel-messages.chan
+        ::   %+  snoc  channel-messages.chan
+        ::   =|  msg=channel-message
+        ::   %_  msg
+        ::     ship  our.bol
+        ::     data  data
+        ::   ==
+        :: =.  channels  (snap channels active-channel chan)
+        :: :_  this
+        :: :~  ~(post-message-update tui bol)
+        :: ==
         ::
       ==
       ::
@@ -150,21 +161,24 @@
   ::
   ++  change-channel-update
     ^-  card
+    ?>  ?=(^ active-group)
+    =/  chans  channels:(~(got by groups) active-group)
     :*  %pass  /homunculus  %agent  [our.bol %homunculus]
         %poke  %homunculus-update
         !>  ^-  update:homunculus
-        :~  [%element channel-list]
-            [%element channel-panel]
+        :~  [%element (make-channel-list chans)]
+            [%element (make-channel-panel chans)]
             [%set-scroll-position %p 100 /channel-content]
         ==
     ==
   ::
   ++  post-message-update
     ^-  card
+    ?>  ?=(^ active-group)
     :*  %pass  /homunculus  %agent  [our.bol %homunculus]
         %poke  %homunculus-update
         !>  ^-  update:homunculus
-        :~  [%element (render-channel-content (snag active-channel channels))]
+        :~  [%element (render-channel-content (snag active-channel channels:(~(got by groups) active-group)))]
             [%set-scroll-position %p 100 /channel-content]
         ==
     ==
@@ -173,8 +187,9 @@
     ^-  manx
     ;row(w "100%", h "100%", bg black, fg off-white)
       ;+  sidebar
-      ;+  channel-list
-      ;+  channel-panel
+      ;+  ?~  active-group
+            inter-group-component
+          intra-group-component
     ==
   ::
   ++  sidebar
@@ -185,10 +200,43 @@
       ;select(w "100%", h "3", mt "1", b "arc", fx "center", select-fg green):"Profile"
     ==
   ::
-  ++  channel-list
+  ++  inter-group-component
+    ^-  manx
+    ;row(w "grow", h "100%")
+      ;+  group-list
+    ==
+  ::
+  ++  group-list
+    ^-  manx
+    ;col/"group-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
+      ;*  %+  turn  ~(tap in ~(key by groups))
+          |=  =id
+          ^-  manx
+          ;col(w "100%")
+            ;select/"change-group/{<ship.id>}/{(trip name.id)}"(w "100%", pl "1", fl "row", select-bg green)
+              ;+  ;/  (trip name.id)
+            ==
+            ;line-h(fg dark-gray);
+          ==
+    ==
+  ::
+  ++  intra-group-component
+    ^-  manx
+    ?>  ?=(^ active-group)
+    =/  grop=group  (~(got by groups) active-group)
+    ;row(w "grow", h "100%")
+      ;+  (make-channel-list channels.grop)
+      ;+  (make-channel-panel channels.grop)
+    ==
+  ::
+  ++  make-channel-list
+    |=  =channels
     ^-  manx
     ;col/"channel-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
       ;col(w "100%", h "11", bg dark-blue)
+        ;layer
+          ;select/"deselect-group"(px "1", select-bg green):"<"
+        ==
         ;layer(fx "center", fy "center")
           ;row(px "1", fg off-white):"Tlon Local"
         ==
@@ -205,22 +253,23 @@
               ;+  ?:  is-active
                     ;/  "▶"
                   ;/  "▷"
-              ;+  ;/  " {(trip name.i)}"
+              ;+  ;/  " {(trip name.id.i)}"
             ==
             ;line-h(fg dark-gray);
           ==
     ==
   ::
-  ++  channel-panel
+  ++  make-channel-panel
+    |=  =channels
     ^-  manx
     =/  chan=channel  (snag active-channel channels)
     ;col/"channel-panel"(w "grow", h "100%", bg black)
-      ;row(w "100%", h "1", fx "center"):"{(trip name.chan)}"
+      ;row(w "100%", h "1", fx "center"):"{(trip name.id.chan)}"
       ;col(w "100%", h "grow")
         ;*  ?~  active-replies  ~
             :_  ~
             ;layer(pr "1", py "1", fx "end")
-              ;+  replies-window
+              ;+  (make-replies-window posts.chan)
             ==
         ;+  (render-channel-content chan)
       ==
@@ -234,32 +283,36 @@
     |=  chan=channel
     ^-  manx
     ;scroll/"channel-content"(w "100%", h "100%", px "1", b "arc", b-fg dark-gray)
-      ;*  %+  spun  channel-messages.chan
-          |=  [msg=channel-message i=@]
-          ^-  [manx @]
-          :_  +(i)
+      ;*  %+  turn  (tap:((on id-post:tlon-channels (unit post:tlon-channels)) lte) posts.chan)
+          |=  [=id-post:tlon-channels post=(unit post:tlon-channels)]
+          ^-  manx
+          ?~  post  ;null;
           ;col(w "100%", mb "1")
             ;row(w "100%", h "1")
-              ;row(mr "1", fg "#8A808C"):"{<ship.msg>}"
+              ;row(mr "1", fg "#8A808C"):"{<author.u.post>}"
               ;pattern(w "grow", h "1", fg dark-gray):"┈"
             ==
             ;row(w "100%")
-              ;row(w "grow"):"{(trip data.msg)}"
+              ;row(w "grow")
+                ;+  (render-post-content content.u.post)
+              ==
               ;col(ml "2")
-                ;select/"open-replies/{<i>}"(px "1", bg dark-gray, select-fg green)
-                  =fg  ?~(replies.msg light-gray off-white)
-                  ;+  ;/  ?~(replies.msg "Reply" "{(scow %ud (lent replies.msg))} replies")
+                ;select/"open-replies/{<id-post>}"(px "1", bg dark-gray, select-fg green)
+                  =fg  ?~(replies.u.post light-gray off-white)
+                  ;+  ;/  ?~(replies.u.post "Reply" "{(scow %ud reply-count.reply-meta.u.post)} replies")
                 ==
               ==
             ==
           ==
     ==
   ::
-  ++  replies-window
+  ++  make-replies-window
+    |=  channel-posts=posts:tlon-channels
     ^-  manx
     ?>  ?=(^ active-replies)
-    =/  main-msg=channel-message
-      (snag u.active-replies channel-messages:(snag active-channel channels))
+    =/  post=(unit post:tlon-channels)
+      (got:((on id-post:tlon-channels (unit post:tlon-channels)) lte) channel-posts u.active-replies)
+    ?~  post  ;null;
     ;col(w "50%", h "100%", px "1", bg dark-gray)
       ;border-t(fg gray)
         ;+  ;/  "█"
@@ -278,22 +331,23 @@
         ;pattern(w "1", h "grow"):"█"
       ==
       ;row(w "100%", h "1", fx "end")
-        ;select/"close-replies/{<u.active-replies>}"(px "1", bg dark-gray, select-fg red, select-d "underline"):"close"
+        ;select/"close-replies"(px "1", bg dark-gray, select-fg red, select-d "underline"):"close"
       ==
       ;scroll(w "100%", h "grow")
-        ;row(fg "#b0aeac"):"{<ship.main-msg>}"
-        ;+  ;/  (trip data.main-msg)
+        ;row(fg "#b0aeac"):"{<author.u.post>}"
+        ;+  (render-post-content content.u.post)
         ;line-h(my "1", fx "center")
           ;row(px "1"):"Replies"
         ==
-        ;*  %+  turn  replies.main-msg
-            |=  msg=message
+        ;*  %+  turn  (tap:((on id-reply:tlon-channels (unit reply:tlon-channels)) lte) replies.u.post)
+            |=  [id=id-reply:tlon-channels re=(unit reply:tlon-channels)]
+            ?~  re  ;null;
             ;col(w "100%", mb "1")
               ;row(w "100%", h "1")
-                ;row(mr "1", fg "#b0aeac"):"{<ship.msg>}"
+                ;row(mr "1", fg "#b0aeac"):"{<author.u.re>}"
                 ;pattern(w "grow", h "1", fg gray):"┈"
               ==
-              ;+  ;/  (trip data.msg)
+              ;+  (render-post-content content.u.re)
             ==
       ==
       ;line-h(mb "1");
@@ -301,6 +355,40 @@
         ;input(w "20", h "2", mr "1", bg off-white);
         ;submit(px "1", select-fg green):"⮹"
       ==
+    ==
+  ::
+  ++  render-post-content
+    |=  =story:tlon-channels
+    ^-  manx
+    ;col(w "100%")
+      ;*  |-  ^-  marl
+          ?~  story  ~
+          :_  $(story t.story)
+          ^-  manx
+          ?-  -.i.story
+            ::
+              %block
+            ;row(px "1", bg red, fg black):"BLOCK NOT IMPLEMENTED YET"
+            ::
+              %inline
+            ;row(w "100%", fl "row-wrap")
+              ;*  |-  ^-  marl
+                  ?~  p.i.story  ~
+                  :_  $(p.i.story t.p.i.story)
+                  ^-  manx
+                  ?@  i.p.i.story
+                    ;row:"{(trip i.p.i.story)}"
+                  ?+  -.i.p.i.story
+                    ::
+                    ;row(px "1", bg red, fg black):"THIS INLINE IS NOT IMPLEMENTED YET"
+                    ::
+                      %ship
+                    ;row(d "bold"):"{<p.i.p.i.story>}"
+                    ::
+                  ==
+            ==
+            ::
+          ==
     ==
   ::
   ++  white             "#FFFFFF"
@@ -316,53 +404,27 @@
   ::
   --
 ::
-++  init-channel--internet-cafe
-  ^-  channel
-  =|  chan=channel
-  =|  chan-msg=channel-message
-  %_  chan
-    name  'Internet Cafe'
-    channel-messages
-      :~  chan-msg(ship ~pet, data 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce ultricies malesuada mi, id fringilla massa. Vestibulum semper metus sit amet nunc iaculis, eu rutrum massa faucibus.')
-          chan-msg(ship ~sun, data 'Sed hendrerit nulla quis erat faucibus dignissim.')
-          chan-msg(ship ~bus, data 'Nunc nulla nulla, pharetra non malesuada vitae, vulputate quis metus. Maecenas ac sodales erat, et venenatis orci. Cras eleifend arcu risus, id porta odio egestas vitae. Nulla tortor lectus, semper at risus at, mattis cursus tellus.')
-          chan-msg(ship ~fur, data 'Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In hac habitasse platea dictumst. Nullam et varius mi. Interdum et malesuada fames ac ante ipsum primis in faucibus. Duis ac urna et massa ultrices lacinia. Donec vitae cursus sem. Phasellus leo sapien, pellentesque nec iaculis ut, posuere eu nibh. Pellentesque convallis erat sit amet nisl imperdiet, vitae blandit elit blandit.')
-          chan-msg(ship ~fed, data 'Cras in posuere ex, ac tincidunt ligula. Donec eros metus, pharetra non facilisis quis, faucibus quis enim.')
-          chan-msg(ship ~fur, data 'Maecenas euismod nunc nec mauris euismod luctus. Quisque tincidunt id libero euismod sollicitudin. Praesent consectetur quam a neque rutrum semper vel a metus. Phasellus quis ornare ligula. Mauris diam nunc, tempus non arcu vitae, rutrum facilisis metus.')
-          chan-msg(ship ~pet, data 'Quisque a lacinia nunc.')
-          chan-msg(ship ~bus, data 'Suspendisse et venenatis erat. Sed id porttitor odio. Aliquam laoreet nisi quis ante laoreet, vel venenatis metus dignissim. Nam libero tellus, hendrerit a lacus eu, commodo volutpat dolor. Fusce dapibus, justo eu hendrerit elementum, nulla odio mollis mauris, eget sagittis purus nulla vel turpis. Aliquam ornare nunc ligula, non mattis tortor congue ullamcorper. Pellentesque non posuere neque. Sed facilisis, nisl vitae gravida elementum, orci arcu auctor ipsum, sed dignissim purus metus cursus massa. Quisque eget felis cursus, posuere libero at, mollis nisl.')
-          chan-msg(ship ~bel, data 'Cras at mauris vel libero pharetra laoreet. Nunc ultricies et purus in tempor. Suspendisse volutpat justo eget justo lacinia, vitae interdum lacus laoreet.')
-          %_  chan-msg
-            ship  ~pet
-            data  'Ut eu condimentum sapien, et imperdiet lacus. Phasellus eu urna nec neque lacinia tincidunt. Proin tincidunt nisl vitae magna vehicula, a mollis felis tristique. Vestibulum vel urna laoreet lacus tristique cursus vel tristique leo.'
-            replies
-              :~  [~fed 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.']
-                  [~sun 'Aliquam tempus elit velit, mattis rutrum lectus molestie sit amet. Sed facilisis, dui semper pulvinar placerat, erat purus euismod mauris, et vestibulum diam ex et dui. Mauris euismod arcu mauris. Curabitur pulvinar faucibus purus vel fermentum.']
-                  [~fur 'In a pellentesque magna. Aenean pharetra leo leo, quis ullamcorper augue tincidunt vitae. Curabitur sed tincidunt ipsum, ac laoreet lacus. Etiam a vehicula ipsum. Duis et lectus purus. Donec eget dui imperdiet est venenatis suscipit faucibus imperdiet lacus. Duis vestibulum pharetra magna, eget posuere nisl ultricies cursus.']
-                  [~bel 'Fusce ornare congue quam, mollis consequat nibh iaculis id. Curabitur mattis lacinia enim, a accumsan augue finibus eu. Praesent aliquam quis quam at tempor.']
-                  [~pet 'Sed blandit quam nunc, id scelerisque lorem ultrices ac.']
-                  [~fur 'Suspendisse et venenatis erat. Sed id porttitor odio. Aliquam laoreet nisi quis ante laoreet, vel venenatis metus dignissim. Nam libero tellus, hendrerit a lacus eu, commodo volutpat dolor. Fusce dapibus, justo eu hendrerit elementum, nulla odio mollis mauris, eget sagittis purus nulla vel turpis. Aliquam ornare nunc ligula, non mattis tortor congue ullamcorper. Pellentesque non posuere neque. Sed facilisis, nisl vitae gravida elementum, orci arcu auctor ipsum, sed dignissim purus metus cursus massa. Quisque eget felis cursus, posuere libero at, mollis nisl.']
-                  [~bus 'Proin quis dui ut est blandit tristique.']
-              ==
-          ==
-      ==
-  ==
-::
-++  init-channel--support
-  ^-  channel
-  =|  chan=channel
-  =|  chan-msg=channel-message
-  %_  chan
-    name  'Support'
-    channel-messages
-      :~  %_  chan-msg
-            ship  ~bus
-            data  'Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit.'
-            replies
-              :~  [~pet 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce ultricies malesuada mi, id fringilla massa. Vestibulum semper metus sit amet nunc iaculis, eu rutrum massa faucibus. Sed hendrerit nulla quis erat faucibus dignissim. Nunc nulla nulla, pharetra non malesuada vitae, vulputate quis metus. Maecenas ac sodales erat, et venenatis orci. Cras eleifend arcu risus, id porta odio egestas vitae. Nulla tortor lectus, semper at risus at, mattis cursus tellus.Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce ultricies malesuada mi, id fringilla massa. Vestibulum semper metus sit amet nunc iaculis, eu rutrum massa faucibus. Sed hendrerit nulla quis erat faucibus dignissim. Nunc nulla nulla, pharetra non malesuada vitae, vulputate quis metus. Maecenas ac sodales erat, et venenatis orci. Cras eleifend arcu risus, id porta odio egestas vitae. Nulla tortor lectus, semper at risus at, mattis cursus tellus.']
-                  [~bus 'Pellentesque porttitor pretium ligula, vitae pharetra nisi elementum at.']
-              ==
-          ==
+++  init-groups-state
+  |=  bol=bowl:gall
+  ^-  ^groups
+  =+  .^(=channels:tlon-channels %gx /(scot %p our.bol)/channels/(scot %da now.bol)/v3/channels/full/noun)
+  =/  chans=(list (pair nest:tlon-channels channel:tlon-channels))  ~(tap by channels)
+  =|  grops=^groups
+  |-  ^+  grops
+  ?~  chans  grops
+  =/  chan=channel
+    :*  [ship.p.i.chans name.p.i.chans]
+        posts.q.i.chans
+    ==
+  %=  $
+    chans  t.chans
+    grops
+      %+  %~  put  by  grops
+        group.perm.q.i.chans
+      =/  grop  (~(get by grops) group.perm.q.i.chans)
+      ?^  grop
+        u.grop(channels [chan channels.u.grop])
+      :*  [chan ~]
       ==
   ==
 ::
