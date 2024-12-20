@@ -83,7 +83,7 @@
           [%change-group @ta @ta ~]
         =.  active-group  [(slav %p i.t.p.eve) i.t.t.p.eve]
         :_  this
-        :~  ~(full-update tui bol)
+        :~  ~(change-group-update tui bol)
         ==
         ::
           [%change-channel @ta ~]
@@ -159,6 +159,16 @@
         %poke  %homunculus-update  !>(`update:homunculus`~[[%element root]])
     ==
   ::
+  ++  change-group-update
+    ^-  card
+    :*  %pass  /homunculus  %agent  [our.bol %homunculus]
+        %poke  %homunculus-update
+        !>  ^-  update:homunculus
+        :~  [%element root]
+            [%set-scroll-position %p 100 /channel-content]
+        ==
+    ==
+  ::
   ++  change-channel-update
     ^-  card
     ?>  ?=(^ active-group)
@@ -232,16 +242,9 @@
   ++  make-channel-list
     |=  =channels
     ^-  manx
+    ?>  ?=(^ active-group)
     ;col/"channel-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
-      ;col(w "100%", h "11", bg dark-blue)
-        ;layer
-          ;select/"deselect-group"(px "1", select-bg green):"<"
-        ==
-        ;layer(fx "center", fy "center")
-          ;row(px "1", fg off-white):"Tlon Local"
-        ==
-        ;pattern(w "100%", h "100%", fg light-blue):"⢎⡱"
-      ==
+      ;+  (make-group-header name.active-group)
       ;line-h(fg dark-gray);
       ;*  %+  spun  channels
           |=  [i=channel a=@]
@@ -299,7 +302,12 @@
               ;col(ml "2")
                 ;select/"open-replies/{<id-post>}"(px "1", bg dark-gray, select-fg green)
                   =fg  ?~(replies.u.post light-gray off-white)
-                  ;+  ;/  ?~(replies.u.post "Reply" "{(scow %ud reply-count.reply-meta.u.post)} replies")
+                  ;+  ;/  ?~  replies.u.post  "Reply"
+                          %+  weld
+                            (scow %ud reply-count.reply-meta.u.post)
+                          ?:  =(1 reply-count.reply-meta.u.post)
+                            " reply"
+                          " replies"
                 ==
               ==
             ==
@@ -368,27 +376,91 @@
           ?-  -.i.story
             ::
               %block
-            ;row(px "1", bg red, fg black):"BLOCK NOT IMPLEMENTED YET"
+            ?-  -.p.i.story       :: TODO: handle properly
+              %image    ;row(w "100%"):"{(trip src.p.i.story)}"
+              %cite     ;row;
+              %header   ;row;
+              %listing  ;row;
+              %rule     ;row;
+              %code     ;row(w "100%"):"{(trip code.p.i.story)}"
+            ==
             ::
               %inline
             ;row(w "100%", fl "row-wrap")
-              ;*  |-  ^-  marl
-                  ?~  p.i.story  ~
-                  :_  $(p.i.story t.p.i.story)
-                  ^-  manx
-                  ?@  i.p.i.story
-                    ;row:"{(trip i.p.i.story)}"
-                  ?+  -.i.p.i.story
-                    ::
-                    ;row(px "1", bg red, fg black):"THIS INLINE IS NOT IMPLEMENTED YET"
-                    ::
-                      %ship
-                    ;row(d "bold"):"{<p.i.p.i.story>}"
-                    ::
-                  ==
+              ;+  ;/  |-  ^-  tape           :: TODO: handle properly
+                      ?~  p.i.story  ~
+                      %+  weld
+                        ^-  tape
+                        ?@  i.p.i.story  (trip i.p.i.story)
+                        ?-  -.i.p.i.story
+                          %italics      $(p.i.story p.i.p.i.story)
+                          %bold         $(p.i.story p.i.p.i.story)
+                          %strike       $(p.i.story p.i.p.i.story)
+                          %blockquote   $(p.i.story p.i.p.i.story)
+                          %inline-code  (trip p.i.p.i.story)
+                          %code         (trip p.i.p.i.story)
+                          %ship         (scow %p p.i.p.i.story)
+                          %block        (trip q.i.p.i.story)
+                          %tag          (trip p.i.p.i.story)
+                          %link         (trip p.i.p.i.story)
+                          %task         $(p.i.story q.i.p.i.story)
+                          %break        ~
+                        ==
+                      $(p.i.story t.p.i.story)
             ==
             ::
           ==
+    ==
+  ::
+  ++  make-group-header
+    |=  group-name=@t
+    ^-  manx
+    =;  [bg=tape fg=tape pat=tape]
+      ;col(w "100%", h "11", bg bg)
+        ;layer
+          ;select/"deselect-group"(px "1", select-bg green):"<"
+        ==
+        ;layer(fx "center", fy "center")
+          ;row(px "1"):"{(trip group-name)}"
+        ==
+        ;pattern(w "100%", h "100%", fg fg)
+          ;+  ;/  pat
+        ==
+      ==
+    ?+  (~(rad og group-name) 10)
+      ::
+      [black black " "]
+      ::
+        %0
+      ["#738290" "#A1B5D8" "◞ "]
+      ::
+        %1
+      ["#0B3C49" "#63ADF2" "⢎⡱"]
+      ::
+        %2
+      ["#03440C" "#04773B" "○ "]
+      ::
+        %3
+      ["#C37D92" "#E0C1B3" "◿◸◹◺"]
+      ::
+        %4
+      ["#D78521" "#F2D398" "╷╵"]
+      ::
+        %5
+      ["#650D1B" "#9B3D12" "△▽"]
+      ::
+        %6
+      ["#171738" "#593C8F" "◠ "]
+      ::
+        %7
+      ["#754668" "#BC96E6" "⢘⢨"]
+      ::
+        %8
+      ["#13505B" "#0C7489" "◗◖ "]
+      ::
+        %9
+      ["#2E4057" "#516a87" "◠◡"]
+      ::
     ==
   ::
   ++  white             "#FFFFFF"
@@ -416,6 +488,8 @@
     :*  [ship.p.i.chans name.p.i.chans]
         posts.q.i.chans
     ==
+  ~&  >   name.id.chan
+  ~&  >>  ~(wyt by posts.chan)
   %=  $
     chans  t.chans
     grops
