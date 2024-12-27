@@ -5,8 +5,10 @@
 +$  tlon-clubs  (map id:club:tlon-chat club:tlon-chat)
 ::
 +$  id  [ship=@p name=@t]
++$  post-batch-start  $@(~ [index=@ id=id-post:tlon-channels])
 +$  channel
   $:  =id
+      =post-batch-start
       =posts:tlon-channels
   ==
 +$  channels  (list channel)
@@ -21,6 +23,10 @@
       =groups
   ==
 +$  card  card:agent:gall
+::
+++  post-batch-size  30
+++  post-batch-jump  10
+::
 --
 ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  
 =|  state
@@ -129,6 +135,25 @@
         ::
       ==
       ::
+        %scroll-trigger
+      ?+  q.eve  !!
+          [%channel-content ~]
+        ?>  ?=(^ active-group)
+        =/  =group    (~(got by groups) active-group)
+        =/  =channel  (snag active-channel channels.group)
+        =?  post-batch-start.channel
+            ?=(^ post-batch-start.channel)
+          (move-batch-start p.eve index.post-batch-start.channel posts.channel)
+        =.  groups
+          %+  %~  put  by  groups  active-group
+          %_  group
+            channels  (snap channels.group active-channel channel)
+          ==
+        :_  this
+        :~  (~(channel-scroll-batch-update tui bol) channel)
+        ==
+      ==
+      ::
     ==
     ::
   ==
@@ -190,6 +215,16 @@
         !>  ^-  update:homunculus
         :~  [%element (render-channel-content (snag active-channel channels:(~(got by groups) active-group)))]
             [%set-scroll-position %p 100 /channel-content]
+        ==
+    ==
+  ::
+  ++  channel-scroll-batch-update
+    |=  =channel
+    ^-  card
+    :*  %pass  /homunculus  %agent  [our.bol %homunculus]
+        %poke  %homunculus-update
+        !>  ^-  update:homunculus
+        :~  [%element (render-channel-content channel)]
         ==
     ==
   ::
@@ -285,12 +320,13 @@
   ++  render-channel-content
     |=  chan=channel
     ^-  manx
-    ;scroll/"channel-content"(w "100%", h "100%", px "1", b "arc", b-fg dark-gray)
-      ;*  %+  turn  (tap:((on id-post:tlon-channels (unit post:tlon-channels)) lte) posts.chan)
+    ;scroll/"channel-content"(w "100%", h "100%", px "1", b "arc", b-fg dark-gray, trigger "1")
+      ;*  %+  turn  (get-posts-to-render chan)
           |=  [=id-post:tlon-channels post=(unit post:tlon-channels)]
           ^-  manx
           ?~  post  ;null;
-          ;col(w "100%", mb "1")
+          =/  id=tape  (scow %da id-post)
+          ;col/"post/{id}"(w "100%", mb "1")
             ;row(w "100%", h "1")
               ;row(mr "1", fg "#8A808C"):"{<author.u.post>}"
               ;pattern(w "grow", h "1", fg dark-gray):"┈"
@@ -300,7 +336,7 @@
                 ;+  (render-post-content content.u.post)
               ==
               ;col(ml "2")
-                ;select/"open-replies/{<id-post>}"(px "1", bg dark-gray, select-fg green)
+                ;select/"open-replies/{id}"(px "1", bg dark-gray, select-fg green)
                   =fg  ?~(replies.u.post light-gray off-white)
                   ;+  ;/  ?~  replies.u.post  "Reply"
                           %+  weld
@@ -484,12 +520,14 @@
   =|  grops=^groups
   |-  ^+  grops
   ?~  chans  grops
+  =/  post-total=@         ~(wyt by posts.q.i.chans)
+  =/  batch-start-index=@  ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
+  =/  batch-start-id       (get-batch-start-id batch-start-index posts.q.i.chans)
   =/  chan=channel
     :*  [ship.p.i.chans name.p.i.chans]
+        ?~(batch-start-id ~ [batch-start-index u.batch-start-id])
         posts.q.i.chans
     ==
-  ~&  >   name.id.chan
-  ~&  >>  ~(wyt by posts.chan)
   %=  $
     chans  t.chans
     grops
@@ -501,6 +539,59 @@
       :*  [chan ~]
       ==
   ==
+::
+++  get-batch-start-id
+  |=  [batch-start-index=@ =posts:tlon-channels]
+  ^-  (unit id-post:tlon-channels)
+  =/  posts-on  ((on id-post:tlon-channels (unit post:tlon-channels)) lte)
+  ?~  posts  ~
+  :-  ~
+  =<  ->
+  %^    %-  dip:posts-on
+        ,[@ud id-post:tlon-channels]
+      posts
+    [0 key.head:(pop:posts-on posts)]
+  |=  $:  [i=@ud id=id-post:tlon-channels]
+          k=id-post:tlon-channels
+          v=(unit post:tlon-channels)
+      ==
+  ^-  $:  (unit (unit post:tlon-channels))
+          ?
+          [@ud id-post:tlon-channels]
+      ==
+  :-  [~ v]
+  ?:  =(i batch-start-index)
+    [& i k]
+  [| +(i) id]
+::
+++  move-batch-start
+  |=  [direction=?(%up %down) batch-start-index=@ =posts:tlon-channels]
+  ^-  post-batch-start
+  =;  new-index=@
+    =/  new-id  (get-batch-start-id new-index posts)
+    ?~  new-id  ~
+    [new-index u.new-id]
+  ?-  direction
+    ::
+      %up
+    ?:((gth batch-start-index post-batch-jump) (sub batch-start-index post-batch-jump) 0)
+    ::
+      %down
+    =/  post-total=@  ~(wyt by posts)
+    =/  max-index=@   ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
+    (min max-index (add post-batch-jump batch-start-index))
+    ::
+  ==
+::
+++  get-posts-to-render
+  |=  =channel
+  ^-  (list [id-post:tlon-channels (unit post:tlon-channels)])
+  ?~  posts.channel  ~
+  =/  posts-on  ((on id-post:tlon-channels (unit post:tlon-channels)) lte)
+  ?~  post-batch-start.channel
+    (tab:posts-on posts.channel ~ post-batch-size)
+  :-  [id.post-batch-start.channel (got:posts-on posts.channel id.post-batch-start.channel)]
+  (tab:posts-on posts.channel [~ id.post-batch-start.channel] post-batch-size)
 ::
 --
 
