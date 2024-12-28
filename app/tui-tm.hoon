@@ -1,31 +1,32 @@
-/-  homunculus, tlon-chat=chat, tlon-channels=channels
+/-  homunculus, tlon-chat=chat, tlon-channels=channels, tlon-groups=groups
 |%
 ::
-+$  tlon-dms    (map ship dm:tlon-chat)
-+$  tlon-clubs  (map id:club:tlon-chat club:tlon-chat)
-::
-+$  id  [ship=@p name=@t]
-+$  post-batch-start  $@(~ [index=@ id=id-post:tlon-channels])
++$  group-id    flag:tlon-groups
++$  channel-id  nest:tlon-channels
++$  name  @t
 +$  channel
-  $:  =id
+  $:  id=channel-id
+      =name
+      active-replies=(unit id-post:tlon-channels)
       =post-batch-start
       =posts:tlon-channels
   ==
 +$  channels  (list channel)
 +$  group
-  $:  =channels
-  ==
-+$  groups  (map id group)
-+$  state
-  $:  active-group=$@(~ id)
+  $:  =name
       active-channel=@
-      active-replies=(unit id-post:tlon-channels)
+      =channels
+  ==
++$  groups  (map group-id group)
++$  state
+  $:  active-group=$@(~ group-id)
       =groups
   ==
 +$  card  card:agent:gall
 ::
-++  post-batch-size  30
-++  post-batch-jump  10
++$  post-batch-start  $@(~ [index=@ id=id-post:tlon-channels])
+++  post-batch-size   30
+++  post-batch-jump   10
 ::
 --
 ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  
@@ -78,10 +79,7 @@
       ?+  p.eve  !!
         ::
           [%deselect-group ~]
-        =:  active-group    ~
-            active-channel  ~
-            active-replies  ~
-          ==
+        =.  active-group  ~
         :_  this
         :~  ~(full-update tui bol)
         ==
@@ -93,23 +91,37 @@
         ==
         ::
           [%change-channel @ta ~]
-        =:  active-channel  (slav %ud i.t.p.eve)
-            active-replies  ~
-          ==
+        ?>  ?=(^ active-group)
+        =/  grop=group           (~(got by groups) active-group)
+        =.  active-channel.grop  (slav %ud i.t.p.eve)
+        =/  chan=channel         (snag active-channel.grop channels.grop)
+        =.  active-replies.chan  ~
+        =.  channels.grop        (snap channels.grop active-channel.grop chan)
+        =.  groups               (~(put by groups) active-group grop)
         :_  this
-        :~  ~(change-channel-update tui bol)
+        :~  (~(change-channel-update tui bol) chan grop)
         ==
         ::
           [%open-replies @ta ~]
-        =.  active-replies  [~ (slav %da i.t.p.eve)]
+        ?>  ?=(^ active-group)
+        =/  grop=group           (~(got by groups) active-group)
+        =/  chan=channel         (snag active-channel.grop channels.grop)
+        =.  active-replies.chan  [~ (slav %da i.t.p.eve)]
+        =.  channels.grop        (snap channels.grop active-channel.grop chan)
+        =.  groups               (~(put by groups) active-group grop)
         :_  this
-        :~  ~(full-update tui bol)
+        :~  (~(toggle-replies-update tui bol) chan)
         ==
         ::
           [%close-replies ~]
-        =.  active-replies  ~
+        ?>  ?=(^ active-group)
+        =/  grop=group           (~(got by groups) active-group)
+        =/  chan=channel         (snag active-channel.grop channels.grop)
+        =.  active-replies.chan  ~
+        =.  channels.grop        (snap channels.grop active-channel.grop chan)
+        =.  groups               (~(put by groups) active-group grop)
         :_  this
-        :~  ~(full-update tui bol)
+        :~  (~(toggle-replies-update tui bol) chan)
         ==
         ::
       ==
@@ -140,14 +152,14 @@
           [%channel-content ~]
         ?>  ?=(^ active-group)
         =/  =group    (~(got by groups) active-group)
-        =/  =channel  (snag active-channel channels.group)
+        =/  =channel  (snag active-channel.group channels.group)
         =?  post-batch-start.channel
             ?=(^ post-batch-start.channel)
           (move-batch-start p.eve index.post-batch-start.channel posts.channel)
         =.  groups
           %+  %~  put  by  groups  active-group
           %_  group
-            channels  (snap channels.group active-channel channel)
+            channels  (snap channels.group active-channel.group channel)
           ==
         :_  this
         :~  (~(channel-scroll-batch-update tui bol) channel)
@@ -178,54 +190,56 @@
         %poke  %homunculus-register  !>(~)
     ==
   ::
-  ++  full-update
+  ++  make-update-card
+    |=  =update:homunculus
     ^-  card
     :*  %pass  /homunculus  %agent  [our.bol %homunculus]
-        %poke  %homunculus-update  !>(`update:homunculus`~[[%element root]])
+        %poke  %homunculus-update  !>(update)
+    ==
+  ::
+  ++  full-update
+    ^-  card
+    %-  make-update-card
+    :~  [%element root]
     ==
   ::
   ++  change-group-update
     ^-  card
-    :*  %pass  /homunculus  %agent  [our.bol %homunculus]
-        %poke  %homunculus-update
-        !>  ^-  update:homunculus
-        :~  [%element root]
-            [%set-scroll-position %p 100 /channel-content]
-        ==
+    %-  make-update-card
+    :~  [%element root]
+        [%set-scroll-position %p 100 /channel-content]
     ==
   ::
   ++  change-channel-update
+    |=  [chan=channel grop=group]
     ^-  card
-    ?>  ?=(^ active-group)
-    =/  chans  channels:(~(got by groups) active-group)
-    :*  %pass  /homunculus  %agent  [our.bol %homunculus]
-        %poke  %homunculus-update
-        !>  ^-  update:homunculus
-        :~  [%element (make-channel-list chans)]
-            [%element (make-channel-panel chans)]
-            [%set-scroll-position %p 100 /channel-content]
-        ==
+    %-  make-update-card
+    :~  [%element (make-channel-list grop)]
+        [%element (make-channel-panel chan)]
+        [%set-scroll-position %p 100 /channel-content]
+    ==
+  ::
+  ++  toggle-replies-update
+    |=  chan=channel
+    ^-  card
+    %-  make-update-card
+    :~  [%element (make-channel-panel chan)]
     ==
   ::
   ++  post-message-update
     ^-  card
     ?>  ?=(^ active-group)
-    :*  %pass  /homunculus  %agent  [our.bol %homunculus]
-        %poke  %homunculus-update
-        !>  ^-  update:homunculus
-        :~  [%element (render-channel-content (snag active-channel channels:(~(got by groups) active-group)))]
-            [%set-scroll-position %p 100 /channel-content]
-        ==
+    =/  grop=group  (~(got by groups) active-group)
+    %-  make-update-card
+    :~  [%element (render-channel-content (snag active-channel.grop channels.grop))]
+        [%set-scroll-position %p 100 /channel-content]
     ==
   ::
   ++  channel-scroll-batch-update
     |=  =channel
     ^-  card
-    :*  %pass  /homunculus  %agent  [our.bol %homunculus]
-        %poke  %homunculus-update
-        !>  ^-  update:homunculus
-        :~  [%element (render-channel-content channel)]
-        ==
+    %-  make-update-card
+    :~  [%element (render-channel-content channel)]
     ==
   ::
   ++  root
@@ -254,12 +268,12 @@
   ++  group-list
     ^-  manx
     ;col/"group-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
-      ;*  %+  turn  ~(tap in ~(key by groups))
-          |=  =id
+      ;*  %+  turn  ~(tap by groups)
+          |=  [=group-id =group]
           ^-  manx
           ;col(w "100%")
-            ;select/"change-group/{<ship.id>}/{(trip name.id)}"(w "100%", pl "1", fl "row", select-bg green)
-              ;+  ;/  (trip name.id)
+            ;select/"change-group/{<p.group-id>}/{(trip q.group-id)}"(w "100%", pl "1", fl "row", select-bg green)
+              ;+  ;/  (trip name.group)
             ==
             ;line-h(fg dark-gray);
           ==
@@ -268,46 +282,45 @@
   ++  intra-group-component
     ^-  manx
     ?>  ?=(^ active-group)
-    =/  grop=group  (~(got by groups) active-group)
+    =/  grop=group    (~(got by groups) active-group)
+    =/  chan=channel  (snag active-channel.grop channels.grop)
     ;row(w "grow", h "100%")
-      ;+  (make-channel-list channels.grop)
-      ;+  (make-channel-panel channels.grop)
+      ;+  (make-channel-list grop)
+      ;+  (make-channel-panel chan)
     ==
   ::
   ++  make-channel-list
-    |=  =channels
+    |=  grop=group
     ^-  manx
-    ?>  ?=(^ active-group)
     ;col/"channel-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
-      ;+  (make-group-header name.active-group)
+      ;+  (make-group-header name.grop)
       ;line-h(fg dark-gray);
-      ;*  %+  spun  channels
+      ;*  %+  spun  channels.grop
           |=  [i=channel a=@]
           :_  +(a)
-          =/  is-active=?  =(a active-channel)
+          =/  is-active=?  =(a active-channel.grop)
           ;col(w "100%")
             ;select/"change-channel/{(scow %ud a)}"(w "100%", pl "1", fl "row", select-bg green)
               =bg  ?:(is-active dark-gray black)
               ;+  ?:  is-active
                     ;/  "▶"
                   ;/  "▷"
-              ;+  ;/  " {(trip name.id.i)}"
+              ;+  ;/  " {(trip name.i)}"
             ==
             ;line-h(fg dark-gray);
           ==
     ==
   ::
   ++  make-channel-panel
-    |=  =channels
+    |=  chan=channel
     ^-  manx
-    =/  chan=channel  (snag active-channel channels)
     ;col/"channel-panel"(w "grow", h "100%", bg black)
-      ;row(w "100%", h "1", fx "center"):"{(trip name.id.chan)}"
+      ;row(w "100%", h "1", fx "center"):"{(trip name.chan)}"
       ;col(w "100%", h "grow")
-        ;*  ?~  active-replies  ~
+        ;*  ?~  active-replies.chan  ~
             :_  ~
             ;layer(pr "1", py "1", fx "end")
-              ;+  (make-replies-window posts.chan)
+              ;+  (make-replies-window u.active-replies.chan posts.chan)
             ==
         ;+  (render-channel-content chan)
       ==
@@ -351,11 +364,10 @@
     ==
   ::
   ++  make-replies-window
-    |=  channel-posts=posts:tlon-channels
+    |=  [main-post-id=id-post:tlon-channels channel-posts=posts:tlon-channels]
     ^-  manx
-    ?>  ?=(^ active-replies)
     =/  post=(unit post:tlon-channels)
-      (got:((on id-post:tlon-channels (unit post:tlon-channels)) lte) channel-posts u.active-replies)
+      (got:((on id-post:tlon-channels (unit post:tlon-channels)) lte) channel-posts main-post-id)
     ?~  post  ;null;
     ;col(w "50%", h "100%", px "1", bg dark-gray)
       ;border-t(fg gray)
@@ -516,27 +528,36 @@
   |=  bol=bowl:gall
   ^-  ^groups
   =+  .^(=channels:tlon-channels %gx /(scot %p our.bol)/channels/(scot %da now.bol)/v3/channels/full/noun)
+  =+  .^(=groups-ui:tlon-groups %gx /(scot %p our.bol)/groups/(scot %da now.bol)/groups/v1/groups-ui)
   =/  chans=(list (pair nest:tlon-channels channel:tlon-channels))  ~(tap by channels)
   =|  grops=^groups
   |-  ^+  grops
   ?~  chans  grops
-  =/  post-total=@         ~(wyt by posts.q.i.chans)
-  =/  batch-start-index=@  ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
-  =/  batch-start-id       (get-batch-start-id batch-start-index posts.q.i.chans)
-  =/  chan=channel
-    :*  [ship.p.i.chans name.p.i.chans]
-        ?~(batch-start-id ~ [batch-start-index u.batch-start-id])
-        posts.q.i.chans
+  =/  post-total=@           ~(wyt by posts.q.i.chans)
+  =/  batch-start-index=@    ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
+  =/  batch-start-id         (get-batch-start-id batch-start-index posts.q.i.chans)
+  =/  grop-ui                (~(get by groups-ui) group.perm.q.i.chans)
+  ?~  grop-ui
+    ~&  >>>  'tui-tm init error: group data not found for a channel'
+    $(chans t.chans)
+  =/  chan-ui                (~(get by channels.u.grop-ui) p.i.chans)
+  =|  chan=channel
+  =:  id.chan                p.i.chans
+      name.chan              ?^(chan-ui title.meta.u.chan-ui name.p.i.chans)
+      post-batch-start.chan  ?~(batch-start-id ~ [batch-start-index u.batch-start-id])
+      posts.chan             posts.q.i.chans
     ==
   %=  $
     chans  t.chans
     grops
-      %+  %~  put  by  grops
-        group.perm.q.i.chans
+      %+  %~  put  by  grops  group.perm.q.i.chans
       =/  grop  (~(get by grops) group.perm.q.i.chans)
       ?^  grop
         u.grop(channels [chan channels.u.grop])
-      :*  [chan ~]
+      =|  new-grop=group
+      %_  new-grop
+        name      title.meta.u.grop-ui
+        channels  [chan ~]
       ==
   ==
 ::
