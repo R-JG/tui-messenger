@@ -38,10 +38,11 @@
 +*  this  .
 ++  on-init
   ^-  (quip card _this)
-  =.  groups  (init-groups-state bol)
+  =^  cards  groups  (init-groups-state bol)
   :_  this
-  :~  ~(full-update tui bol)
+  :*  ~(full-update tui bol)
       ~(register tui bol)
+      cards
   ==
 ++  on-save
   ^-  vase
@@ -49,10 +50,11 @@
 ++  on-load
   |=  old=vase
   ^-  (quip card _this)
-  =.  groups  (init-groups-state bol)
+  =^  cards  groups  (init-groups-state bol)
   :_  this
-  :~  ~(full-update tui bol)
+  :*  ~(full-update tui bol)
       ~(register tui bol)
+      cards
   ==
 ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  
 ++  on-poke
@@ -162,7 +164,7 @@
             channels  (snap channels.group active-channel.group channel)
           ==
         :_  this
-        :~  (~(channel-scroll-batch-update tui bol) channel)
+        :~  (~(channel-content-update tui bol) channel)
         ==
       ==
       ::
@@ -173,7 +175,87 @@
 ++  on-watch  |=(path ^-((quip card _this) !!))
 ++  on-leave  |=(path ^-((quip card _this) !!))
 ++  on-peek   |=(path ^-((unit (unit cage)) !!))
-++  on-agent  |=([wire sign:agent:gall] ^-((quip card _this) !!))
+::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  
+++  on-agent
+  |=  [=(pole knot) =sign:agent:gall]
+  ^-  (quip card _this)
+  ?+  -.sign  [~ this]
+    ::
+      %fact
+    ?+  pole  [~ this]
+      ::
+        [%channel group-ship=@ group-term=@ chan-kind=@ chan-ship=@ chan-name=@ ~]
+      =/  g-id  (group-id [(slav %p group-ship.pole) group-term.pole])
+      =/  update  !<(r-channels:tlon-channels q.cage.sign)
+      ?+  -.r-channel.update  [~ this]  :: TODO: handle other cases
+        ::
+          %post
+        =/  =group  (~(got by groups) g-id)
+        =/  chan-index
+          =|  i=@
+          |-  ^-  (unit @)
+          ?~  channels.group
+            ~
+          ?:  =(nest.update id.i.channels.group)
+            [~ i]
+          $(channels.group t.channels.group, i +(i))
+        ?>  ?=(^ chan-index)
+        ?+  -.r-post.r-channel.update  [~ this]
+          ::
+            %set
+          =/  chan=channel    (snag u.chan-index channels.group)
+          =.  posts.chan      (put:posts-on posts.chan id.r-channel.update post.r-post.r-channel.update)
+          =.  channels.group  (snap channels.group u.chan-index chan)
+          =.  groups          (~(put by groups) g-id group)
+          ?.  ?&  =(g-id active-group)
+                  =(u.chan-index active-channel.group)
+              ==
+            [~ this]
+          :_  this
+          :~  (~(channel-content-update tui bol) chan)  :: TODO: only render if on the end batch
+          ==
+          ::
+            %reply
+          ?+  -.r-reply.r-post.r-channel.update  [~ this]
+            ::
+              %set
+            =/  chan=channel         (snag u.chan-index channels.group)
+            =/  parent-post          (got:posts-on posts.chan id.r-channel.update)
+            =?  parent-post
+                ?=(^ parent-post)
+              %_  parent-post
+                reply-count.reply-meta.u
+                  +(reply-count.reply-meta.u.parent-post)
+                replies.u
+                  %^    put:replies-on
+                      replies.u.parent-post
+                    id.r-post.r-channel.update
+                  reply.r-reply.r-post.r-channel.update
+              ==
+            =.  posts.chan           (put:posts-on posts.chan id.r-channel.update parent-post)
+            =.  channels.group       (snap channels.group u.chan-index chan)
+            =.  groups               (~(put by groups) g-id group)
+            ?.  ?&  =(g-id active-group)
+                    =(u.chan-index active-channel.group)
+                ==
+              [~ this]
+            :_  this
+            ?~  active-replies.chan
+              :~  (~(channel-content-update tui bol) chan)
+              ==
+            :~  (~(replies-update tui bol) parent-post)
+            ==
+            ::
+          ==
+          ::
+        ==
+        ::
+      ==
+      ::
+    ==
+    ::
+  ==
+::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  
 ++  on-arvo   |=([wire sign-arvo] ^-((quip card _this) !!))
 ++  on-fail   |=([term tang] ^-((quip card _this) !!))
 ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  
@@ -235,11 +317,18 @@
         [%set-scroll-position %p 100 /channel-content]
     ==
   ::
-  ++  channel-scroll-batch-update
+  ++  channel-content-update
     |=  =channel
     ^-  card
     %-  make-update-card
     :~  [%element (render-channel-content channel)]
+    ==
+  ::
+  ++  replies-update
+    |=  post=(unit post:tlon-channels)
+    ^-  card
+    %-  make-update-card
+    :~  [%element (render-replies-window post)]
     ==
   ::
   ++  root
@@ -319,8 +408,9 @@
       ;col(w "100%", h "grow")
         ;*  ?~  active-replies.chan  ~
             :_  ~
+            =/  parent-post  (got:posts-on posts.chan u.active-replies.chan)
             ;layer(pr "1", py "1", fx "end")
-              ;+  (make-replies-window u.active-replies.chan posts.chan)
+              ;+  (render-replies-window parent-post)
             ==
         ;+  (render-channel-content chan)
       ==
@@ -363,13 +453,11 @@
           ==
     ==
   ::
-  ++  make-replies-window
-    |=  [main-post-id=id-post:tlon-channels channel-posts=posts:tlon-channels]
+  ++  render-replies-window
+    |=  parent-post=(unit post:tlon-channels)
     ^-  manx
-    =/  post=(unit post:tlon-channels)
-      (got:((on id-post:tlon-channels (unit post:tlon-channels)) lte) channel-posts main-post-id)
-    ?~  post  ;null;
-    ;col(w "50%", h "100%", px "1", bg dark-gray)
+    ?~  parent-post  ;null;
+    ;col/"replies-window"(w "50%", h "100%", px "1", bg dark-gray)
       ;border-t(fg gray)
         ;+  ;/  "█"
         ;pattern(w "grow", h "1"):"▀"
@@ -390,12 +478,12 @@
         ;select/"close-replies"(px "1", bg dark-gray, select-fg red, select-d "underline"):"close"
       ==
       ;scroll(w "100%", h "grow")
-        ;row(fg "#b0aeac"):"{<author.u.post>}"
-        ;+  (render-post-content content.u.post)
+        ;row(fg "#b0aeac"):"{<author.u.parent-post>}"
+        ;+  (render-post-content content.u.parent-post)
         ;line-h(my "1", fx "center")
           ;row(px "1"):"Replies"
         ==
-        ;*  %+  turn  (tap:((on id-reply:tlon-channels (unit reply:tlon-channels)) lte) replies.u.post)
+        ;*  %+  turn  (tap:replies-on replies.u.parent-post)
             |=  [id=id-reply:tlon-channels re=(unit reply:tlon-channels)]
             ?~  re  ;null;
             ;col(w "100%", mb "1")
@@ -524,15 +612,29 @@
   ::
   --
 ::
+++  make-channel-subscription-card
+  |=  [=group-id =channel-id bol=bowl:gall]
+  ^-  card
+  =/  gip=@ta  (scot %p p.group-id)
+  =/  ter=@ta  q.group-id
+  =/  kin=@ta  kind.channel-id
+  =/  cip=@ta  (scot %p ship.channel-id)
+  =/  nam=@ta  name.channel-id
+  :*  %pass  /channel/[gip]/[ter]/[kin]/[cip]/[nam]  %agent  [our.bol %channels]
+      %watch  /v1/[kin]/[cip]/[nam]
+  ==
+::
 ++  init-groups-state
   |=  bol=bowl:gall
-  ^-  ^groups
+  ^-  (quip card ^groups)
   =+  .^(=channels:tlon-channels %gx /(scot %p our.bol)/channels/(scot %da now.bol)/v3/channels/full/noun)
   =+  .^(=groups-ui:tlon-groups %gx /(scot %p our.bol)/groups/(scot %da now.bol)/groups/v1/groups-ui)
   =/  chans=(list (pair nest:tlon-channels channel:tlon-channels))  ~(tap by channels)
   =|  grops=^groups
-  |-  ^+  grops
-  ?~  chans  grops
+  =|  cards=(list card)
+  |-  ^-  (quip card ^groups)
+  ?~  chans
+    cards^grops
   =/  post-total=@           ~(wyt by posts.q.i.chans)
   =/  batch-start-index=@    ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
   =/  batch-start-id         (get-batch-start-id batch-start-index posts.q.i.chans)
@@ -549,6 +651,7 @@
     ==
   %=  $
     chans  t.chans
+    cards  [(make-channel-subscription-card group.perm.q.i.chans id.chan bol) cards]
     grops
       %+  %~  put  by  grops  group.perm.q.i.chans
       =/  grop  (~(get by grops) group.perm.q.i.chans)
@@ -564,7 +667,6 @@
 ++  get-batch-start-id
   |=  [batch-start-index=@ =posts:tlon-channels]
   ^-  (unit id-post:tlon-channels)
-  =/  posts-on  ((on id-post:tlon-channels (unit post:tlon-channels)) lte)
   ?~  posts  ~
   :-  ~
   =<  ->
@@ -608,11 +710,13 @@
   |=  =channel
   ^-  (list [id-post:tlon-channels (unit post:tlon-channels)])
   ?~  posts.channel  ~
-  =/  posts-on  ((on id-post:tlon-channels (unit post:tlon-channels)) lte)
   ?~  post-batch-start.channel
     (tab:posts-on posts.channel ~ post-batch-size)
   :-  [id.post-batch-start.channel (got:posts-on posts.channel id.post-batch-start.channel)]
   (tab:posts-on posts.channel [~ id.post-batch-start.channel] post-batch-size)
+::
+++  posts-on    ((on id-post:tlon-channels (unit post:tlon-channels)) lte)
+++  replies-on  ((on id-reply:tlon-channels (unit reply:tlon-channels)) lte)
 ::
 --
 
