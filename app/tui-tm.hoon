@@ -131,21 +131,38 @@
         %form
       ?+  p.eve  !!
         ::
-          [%channel-form ~]
-        [~ this]
-        :: =/  data=@t       (~(got by q.eve) /channel-input)
-        :: =/  chan=channel  (snag active-channel channels)
-        :: =.  channel-messages.chan
-        ::   %+  snoc  channel-messages.chan
-        ::   =|  msg=channel-message
-        ::   %_  msg
-        ::     ship  our.bol
-        ::     data  data
-        ::   ==
-        :: =.  channels  (snap channels active-channel chan)
-        :: :_  this
-        :: :~  ~(post-message-update tui bol)
-        :: ==
+          [%channel-post-form ~]
+        ?>  ?=(^ active-group)
+        =/  data=@t                (~(got by q.eve) /channel-post-input)
+        =/  grop=group             (~(got by groups) active-group)
+        =/  chan=channel           (snag active-channel.grop channels.grop)
+        =/  post-total=@           ~(wyt by posts.chan)
+        =/  batch-start-index=@    ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
+        =/  batch-start-id         (get-batch-start-id batch-start-index posts.chan)
+        =/  new-batch-start        `post-batch-start`?~(batch-start-id ~ [batch-start-index u.batch-start-id])
+        ?:  =(post-batch-start.chan new-batch-start)
+          :_  this
+          :~  (make-channel-post-card id.chan data bol)
+              (~(post-message-update tui bol) ~)
+          ==
+        =.  post-batch-start.chan  new-batch-start
+        =.  channels.grop          (snap channels.grop active-channel.grop chan)
+        =.  groups                 (~(put by groups) active-group grop)
+        :_  this
+        :~  (make-channel-post-card id.chan data bol)
+            (~(post-message-update tui bol) chan)
+        ==
+        ::
+          [%channel-reply-form ~]
+        ?>  ?=(^ active-group)
+        =/  data=@t                (~(got by q.eve) /channel-reply-input)
+        =/  grop=group             (~(got by groups) active-group)
+        =/  chan=channel           (snag active-channel.grop channels.grop)
+        ?>  ?=(^ active-replies.chan)
+        :_  this
+        :~  (make-channel-reply-card id.chan u.active-replies.chan data bol)
+            ~(post-reply-update tui bol)
+        ==
         ::
       ==
       ::
@@ -243,7 +260,7 @@
             ?~  active-replies.chan
               :~  (~(channel-content-update tui bol) chan)
               ==
-            :~  (~(replies-update tui bol) parent-post)
+            :~  (~(replies-update tui bol) ?>(?=(^ parent-post) u.parent-post))
             ==
             ::
           ==
@@ -309,12 +326,20 @@
     ==
   ::
   ++  post-message-update
+    |=  maybe-chan=$@(~ channel)
     ^-  card
-    ?>  ?=(^ active-group)
-    =/  grop=group  (~(got by groups) active-group)
     %-  make-update-card
-    :~  [%element (render-channel-content (snag active-channel.grop channels.grop))]
-        [%set-scroll-position %p 100 /channel-content]
+    ?^  maybe-chan
+      :~  [%element (render-channel-content maybe-chan)]
+          [%set-scroll-position %p 100 /channel-content]
+      ==
+    :~  [%set-scroll-position %p 100 /channel-content]
+    ==
+  ::
+  ++  post-reply-update
+    ^-  card
+    %-  make-update-card
+    :~  [%set-scroll-position %p 100 /replies-content]
     ==
   ::
   ++  channel-content-update
@@ -325,10 +350,10 @@
     ==
   ::
   ++  replies-update
-    |=  post=(unit post:tlon-channels)
+    |=  parent-post=post:tlon-channels
     ^-  card
     %-  make-update-card
-    :~  [%element (render-replies-window post)]
+    :~  [%element (render-replies-content parent-post)]
     ==
   ::
   ++  root
@@ -414,8 +439,8 @@
             ==
         ;+  (render-channel-content chan)
       ==
-      ;form/"channel-form"(w "100%", h "5", fl "row", fx "center", fy "center")
-        ;input/"channel-input"(w "36", h "3", mr "3", bg off-white);
+      ;form/"channel-post-form"(w "100%", h "5", fl "row", fx "center", fy "center")
+        ;input/"channel-post-input"(w "36", h "3", mr "3", bg off-white);
         ;submit(w "3", h "1", px "1", select-fg green):"⮹"
       ==
     ==
@@ -477,28 +502,33 @@
       ;row(w "100%", h "1", fx "end")
         ;select/"close-replies"(px "1", bg dark-gray, select-fg red, select-d "underline"):"close"
       ==
-      ;scroll(w "100%", h "grow")
-        ;row(fg "#b0aeac"):"{<author.u.parent-post>}"
-        ;+  (render-post-content content.u.parent-post)
-        ;line-h(my "1", fx "center")
-          ;row(px "1"):"Replies"
-        ==
-        ;*  %+  turn  (tap:replies-on replies.u.parent-post)
-            |=  [id=id-reply:tlon-channels re=(unit reply:tlon-channels)]
-            ?~  re  ;null;
-            ;col(w "100%", mb "1")
-              ;row(w "100%", h "1")
-                ;row(mr "1", fg "#b0aeac"):"{<author.u.re>}"
-                ;pattern(w "grow", h "1", fg gray):"┈"
-              ==
-              ;+  (render-post-content content.u.re)
-            ==
-      ==
+      ;+  (render-replies-content u.parent-post)
       ;line-h(mb "1");
-      ;form(w "100%", fx "center", fl "row")
-        ;input(w "20", h "2", mr "1", bg off-white);
+      ;form/"channel-reply-form"(w "100%", fx "center", fl "row")
+        ;input/"channel-reply-input"(w "20", h "2", mr "1", bg off-white);
         ;submit(px "1", select-fg green):"⮹"
       ==
+    ==
+  ::
+  ++  render-replies-content
+    |=  parent-post=post:tlon-channels
+    ^-  manx
+    ;scroll/"replies-content"(w "100%", h "grow")
+      ;row(fg "#b0aeac"):"{<author.parent-post>}"
+      ;+  (render-post-content content.parent-post)
+      ;line-h(my "1", fx "center")
+        ;row(px "1"):"Replies"
+      ==
+      ;*  %+  turn  (tap:replies-on replies.parent-post)
+          |=  [id=id-reply:tlon-channels re=(unit reply:tlon-channels)]
+          ?~  re  ;null;
+          ;col(w "100%", mb "1")
+            ;row(w "100%", h "1")
+              ;row(mr "1", fg "#b0aeac"):"{<author.u.re>}"
+              ;pattern(w "grow", h "1", fg gray):"┈"
+            ==
+            ;+  (render-post-content content.u.re)
+          ==
     ==
   ::
   ++  render-post-content
@@ -611,6 +641,47 @@
   ++  red               "#BB4430"
   ::
   --
+::
+++  transform-cord-to-memo
+  |=  [=cord bol=bowl:gall]
+  ^-  memo:tlon-channels
+  :_  [our.bol now.bol]
+  :_  ~
+  :-  %inline
+  :~  cord
+      [%break ~]
+  ==
+::
+++  make-channel-post-card
+  |=  [=channel-id data=@t bol=bowl:gall]
+  ^-  card
+  =/  kin=@ta  kind.channel-id
+  =/  sip=@ta  (scot %p ship.channel-id)
+  =/  nam=@ta  name.channel-id
+  =/  =memo:tlon-channels  (transform-cord-to-memo data bol)
+  =/  post-action=a-channels:tlon-channels
+    :*  %channel  channel-id  %post
+        %add  [memo [%chat ~]]
+    ==
+  :*  %pass  /post/[kin]/[sip]/[nam]  %agent  [our.bol %channels]
+      %poke  %channel-action  !>(post-action)
+  ==
+::
+++  make-channel-reply-card
+  |=  [=channel-id post-id=id-post:tlon-channels data=@t bol=bowl:gall]
+  ^-  card
+  =/  kin=@ta  kind.channel-id
+  =/  sip=@ta  (scot %p ship.channel-id)
+  =/  nam=@ta  name.channel-id
+  =/  =memo:tlon-channels  (transform-cord-to-memo data bol)
+  =/  post-action=a-channels:tlon-channels
+    :*  %channel  channel-id  %post
+        %reply  post-id
+        %add  memo
+    ==
+  :*  %pass  /reply/(scot %da post-id)/[kin]/[sip]/[nam]  %agent  [our.bol %channels]
+      %poke  %channel-action  !>(post-action)
+  ==
 ::
 ++  make-channel-subscription-card
   |=  [=group-id =channel-id bol=bowl:gall]
