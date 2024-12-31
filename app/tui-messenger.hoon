@@ -9,6 +9,7 @@
       =name
       active-replies=(unit id-post:tlon-channels)
       =post-batch-start
+      post-total=@
       =posts:tlon-channels
   ==
 +$  channels  (list channel)
@@ -136,8 +137,7 @@
         =/  data=@t                (~(got by q.eve) /channel-post-input)
         =/  grop=group             (~(got by groups) active-group)
         =/  chan=channel           (snag active-channel.grop channels.grop)
-        =/  post-total=@           ~(wyt by posts.chan)
-        =/  batch-start-index=@    ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
+        =/  batch-start-index=@    ?:((gth post-total.chan post-batch-size) (sub post-total.chan post-batch-size) 0)
         =/  batch-start-id         (get-batch-start-id batch-start-index posts.chan)
         =/  new-batch-start        `post-batch-start`?~(batch-start-id ~ [batch-start-index u.batch-start-id])
         ?:  =(post-batch-start.chan new-batch-start)
@@ -172,9 +172,23 @@
         ?>  ?=(^ active-group)
         =/  =group    (~(got by groups) active-group)
         =/  =channel  (snag active-channel.group channels.group)
+        ?:  ?|  ?&  ?=(^ post-batch-start.channel)
+                    ?=(%up p.eve)
+                    =(0 index.post-batch-start.channel)
+                ==
+                ?&  ?=(^ post-batch-start.channel)
+                    ?=(%down p.eve)
+                    =/  max-index=@
+                      ?:  (gth post-total.channel post-batch-size)
+                        (sub post-total.channel post-batch-size)
+                      0
+                    =(max-index index.post-batch-start.channel)
+                ==
+            ==
+          [~ this]
         =?  post-batch-start.channel
             ?=(^ post-batch-start.channel)
-          (move-batch-start p.eve index.post-batch-start.channel posts.channel)
+          (move-batch-start p.eve index.post-batch-start.channel post-total.channel posts.channel)
         =.  groups
           %+  %~  put  by  groups  active-group
           %_  group
@@ -220,10 +234,12 @@
         ?+  -.r-post.r-channel.update  [~ this]
           ::
             %set
-          =/  chan=channel    (snag u.chan-index channels.group)
-          =.  posts.chan      (put:posts-on posts.chan id.r-channel.update post.r-post.r-channel.update)
-          =.  channels.group  (snap channels.group u.chan-index chan)
-          =.  groups          (~(put by groups) g-id group)
+          =/  chan=channel     (snag u.chan-index channels.group)
+          =:  posts.chan       (put:posts-on posts.chan id.r-channel.update post.r-post.r-channel.update)
+              post-total.chan  +(post-total.chan)
+            ==
+          =.  channels.group   (snap channels.group u.chan-index chan)
+          =.  groups           (~(put by groups) g-id group)
           ?.  ?&  =(g-id active-group)
                   =(u.chan-index active-channel.group)
               ==
@@ -718,6 +734,7 @@
   =:  id.chan                p.i.chans
       name.chan              ?^(chan-ui title.meta.u.chan-ui name.p.i.chans)
       post-batch-start.chan  ?~(batch-start-id ~ [batch-start-index u.batch-start-id])
+      post-total.chan        post-total
       posts.chan             posts.q.i.chans
     ==
   %=  $
@@ -759,7 +776,7 @@
   [| +(i) id]
 ::
 ++  move-batch-start
-  |=  [direction=?(%up %down) batch-start-index=@ =posts:tlon-channels]
+  |=  [direction=?(%up %down) batch-start-index=@ post-total=@ =posts:tlon-channels]
   ^-  post-batch-start
   =;  new-index=@
     =/  new-id  (get-batch-start-id new-index posts)
@@ -771,7 +788,6 @@
     ?:((gth batch-start-index post-batch-jump) (sub batch-start-index post-batch-jump) 0)
     ::
       %down
-    =/  post-total=@  ~(wyt by posts)
     =/  max-index=@   ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
     (min max-index (add post-batch-jump batch-start-index))
     ::
