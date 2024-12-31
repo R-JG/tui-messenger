@@ -711,7 +711,7 @@
   =/  batch-start-id         (get-batch-start-id batch-start-index posts.q.i.chans)
   =/  grop-ui                (~(get by groups-ui) group.perm.q.i.chans)
   ?~  grop-ui
-    ~&  >>>  'tui-tm init error: group data not found for a channel'
+    ~&  >>>  'tui-messenger init error: group data not found for a channel'
     $(chans t.chans)
   =/  chan-ui                (~(get by channels.u.grop-ui) p.i.chans)
   =|  chan=channel
