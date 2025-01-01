@@ -15,6 +15,7 @@
 +$  channels  (list channel)
 +$  group
   $:  =name
+      get-channels=(unit (map nest:tlon-groups channel:tlon-groups))
       active-channel=@
       =channels
   ==
@@ -43,6 +44,7 @@
   :_  this
   :*  ~(full-update tui bol)
       ~(register tui bol)
+      (make-groups-subscription-card bol)
       cards
   ==
 ++  on-save
@@ -55,6 +57,7 @@
   :_  this
   :*  ~(full-update tui bol)
       ~(register tui bol)
+      (make-groups-subscription-card bol)
       cards
   ==
 ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  ::  
@@ -89,6 +92,14 @@
         ::
           [%change-group @ta @ta ~]
         =.  active-group  [(slav %p i.t.p.eve) i.t.t.p.eve]
+        ?>  ?=(^ active-group)
+        =/  grop  (~(got by groups) active-group)
+        ?^  get-channels.grop
+          =^  cards  channels.grop  (get-channels-for-joined-group active-group u.get-channels.grop bol)
+          =.  groups  (~(put by groups) active-group grop)
+          :_  this
+          :~  ~(change-group-update tui bol)
+          ==
         :_  this
         :~  ~(change-group-update tui bol)
         ==
@@ -214,6 +225,55 @@
     ::
       %fact
     ?+  pole  [~ this]
+      ::
+        [%groups ~]
+      :: ~&  >  -.cage.sign
+      ?+  -.cage.sign  [~ this]
+        ::
+          %group-action-3
+        =/  action  !<(action:tlon-groups q.cage.sign)
+        :: ~&  >>  action
+        ?+  -.q.q.action  [~ this]
+          ::
+            %channel
+          ?.  ?=(%add -.q.q.q.action)       :: TODO: handle the other cases
+            [~ this]
+          :: apparently this case is hit when you've created a group
+          =|  new-chan=channel
+          =:  id.new-chan    (nest:tlon-channels p.q.q.action)
+              name.new-chan  title.meta.channel.q.q.q.action
+            ==
+          =.  groups
+            =/  existing-group  (~(get by groups) p.action)
+            ?^  existing-group
+              (~(put by groups) p.action u.existing-group(channels (snoc channels.u.existing-group new-chan)))
+            =+  .^  =group-ui:tlon-groups  %gx
+                    /(scot %p our.bol)/groups/(scot %da now.bol)/groups/(scot %p p.p.action)/[q.p.action]/v1/group-ui
+                ==
+            =|  new-grop=group
+            =:  name.new-grop      title.meta.group-ui
+                channels.new-grop  [new-chan ~]
+              ==
+            (~(put by groups) p.action new-grop)
+          :_  this
+          :~  (make-channel-subscription-card p.action id.new-chan bol)
+              ~(full-update tui bol)
+          ==
+          ::
+            %create
+          :: apparently this case is hit when you've joined a group
+          =|  new-grop=group
+          =:  name.new-grop          title.meta.p.q.q.action
+              get-channels.new-grop  [~ channels.p.q.q.action]
+            ==
+          =.  groups  (~(put by groups) p.action new-grop)
+          :_  this
+          :~  ~(full-update tui bol)
+          ==
+          ::
+        ==
+        ::
+      ==
       ::
         [%channel group-ship=@ group-term=@ chan-kind=@ chan-ship=@ chan-name=@ ~]
       =/  g-id  (group-id [(slav %p group-ship.pole) group-term.pole])
@@ -397,7 +457,7 @@
   ::
   ++  group-list
     ^-  manx
-    ;col/"group-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
+    ;scroll/"group-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
       ;*  %+  turn  ~(tap by groups)
           |=  [=group-id =group]
           ^-  manx
@@ -711,6 +771,13 @@
       %watch  /v1/[kin]/[cip]/[nam]
   ==
 ::
+++  make-groups-subscription-card
+  |=  bol=bowl:gall
+  ^-  card
+  :*  %pass  /groups  %agent  [our.bol %groups]
+      %watch  /groups
+  ==
+::
 ++  init-groups-state
   |=  bol=bowl:gall
   ^-  (quip card ^groups)
@@ -751,6 +818,39 @@
         channels  [chan ~]
       ==
   ==
+::
+++  get-channels-for-joined-group
+  |=  [=group-id channels-metadata=(map nest:tlon-groups channel:tlon-groups) bol=bowl:gall]
+  ^-  (quip card channels)
+  =<  [q p]
+  %^  spin  ~(tap by channels-metadata)
+    *(list card)
+  |=  [[id=nest:tlon-groups =channel:tlon-groups] cards=(list card)]
+  ^-  [^channel (list card)]
+  =/  =channel-id  (nest:tlon-channels id)
+  =|  new-chan=^channel
+  =:  id.new-chan    channel-id
+      name.new-chan  title.meta.channel
+    ==
+  =/  some-big-number=@ta  ~.5.000
+  =/  paged-posts
+      %-  mole
+      |.
+      .^  paged-posts:tlon-channels  %gx
+          /(scot %p our.bol)/channels/(scot %da now.bol)/v2/[kind.channel-id]/(scot %p ship.channel-id)/[name.channel-id]/posts/newest/[some-big-number]/post/channel-posts-2
+      ==
+  ?~  paged-posts
+    ~&  'tui-messenger: channel posts not found'
+    [new-chan cards]
+  =/  post-total=@               ~(wyt by posts.u.paged-posts)
+  =/  batch-start-index=@        ?:((gth post-total post-batch-size) (sub post-total post-batch-size) 0)
+  =/  batch-start-id             (get-batch-start-id batch-start-index posts.u.paged-posts)
+  =:  post-batch-start.new-chan  ?~(batch-start-id ~ [batch-start-index u.batch-start-id])
+      post-total.new-chan        post-total
+      posts.new-chan             posts.u.paged-posts
+    ==
+  :-  new-chan
+  [(make-channel-subscription-card group-id id.new-chan bol) cards]
 ::
 ++  get-batch-start-id
   |=  [batch-start-index=@ =posts:tlon-channels]
