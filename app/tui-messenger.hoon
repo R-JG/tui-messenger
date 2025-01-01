@@ -143,6 +143,14 @@
         %form
       ?+  p.eve  !!
         ::
+          [%join-group-form ~]
+        =/  sip=@t     (~(got by q.eve) /join-group-ship-input)
+        =/  nam=@t     (~(got by q.eve) /join-group-name-input)
+        =/  =group-id  [(slav %p sip) nam]
+        :_  this
+        :~  (make-join-group-card group-id bol)
+        ==
+        ::
           [%channel-post-form ~]
         ?>  ?=(^ active-group)
         =/  data=@t                (~(got by q.eve) /channel-post-input)
@@ -458,6 +466,8 @@
   ++  group-list
     ^-  manx
     ;scroll/"group-list"(w "20%", h "100%", mx "1", bg black, b "arc", b-fg dark-gray)
+      ;+  join-group-form
+      ;line-h(fg dark-gray);
       ;*  %+  turn  ~(tap by groups)
           |=  [=group-id =group]
           ^-  manx
@@ -467,6 +477,23 @@
             ==
             ;line-h(fg dark-gray);
           ==
+    ==
+  ::
+  ++  join-group-form
+    ^-  manx
+    ;form/"join-group-form"(w "100%", px "2", py "1", bg dark-gray)
+      ;row(mb "1"):"Join a group:"
+      ;row(mb "1")
+        ;row(mr "1"):"Host:"
+        ;input/"join-group-ship-input"(w "grow", bg off-white);
+      ==
+      ;row(mb "1")
+        ;row(mr "1"):"Name:"
+        ;input/"join-group-name-input"(w "grow", bg off-white);
+      ==
+      ;row(w "100%", fx "end")
+        ;submit(b "arc", select-bg green):"Join"
+      ==
     ==
   ::
   ++  intra-group-component
@@ -776,6 +803,15 @@
   ^-  card
   :*  %pass  /groups  %agent  [our.bol %groups]
       %watch  /groups
+  ==
+::
+++  make-join-group-card
+  |=  [=group-id bol=bowl:gall]
+  ^-  card
+  =/  sip=@ta  (scot %p p.group-id)
+  =/  ter=@ta  q.group-id
+  :*  %pass  /join-group/[sip]/[ter]  %agent  [our.bol %groups]
+      %poke  %group-join  !>(`join:tlon-groups`[group-id &])
   ==
 ::
 ++  init-groups-state
