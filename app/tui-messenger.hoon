@@ -94,14 +94,24 @@
         =.  active-group  [(slav %p i.t.p.eve) i.t.t.p.eve]
         ?>  ?=(^ active-group)
         =/  grop  (~(got by groups) active-group)
-        ?^  get-channels.grop
-          =^  cards  channels.grop  (get-channels-for-joined-group active-group u.get-channels.grop bol)
-          =.  groups  (~(put by groups) active-group grop)
+        ?.  .?(get-channels.grop)
           :_  this
           :~  ~(change-group-update tui bol)
           ==
+        :: =^  cards  channels.grop  (get-channels-for-joined-group active-group u.get-channels.grop bol)
+        :: TODO: FIX AND USE THE PROPER SCRY FOR NEW GROUP CHANNELS!!!
+        =^  c  groups          (init-groups-state bol)
+        =.  grop               (~(got by groups) active-group)
+        =.  get-channels.grop  ~
+        =/  cards=(list card)
+          %+  turn  channels.grop
+          |=  =channel
+          ^-  card
+          (make-channel-subscription-card active-group id.channel bol)
+        =.  groups  (~(put by groups) active-group grop)
         :_  this
-        :~  ~(change-group-update tui bol)
+        :*  ~(change-group-update tui bol)
+            cards
         ==
         ::
           [%change-channel @ta ~]
@@ -492,7 +502,7 @@
         ;input/"join-group-name-input"(w "grow", bg off-white);
       ==
       ;row(w "100%", fx "end")
-        ;submit(b "arc", select-bg green):"Join"
+        ;submit(b "arc", select-fg green):"Join"
       ==
     ==
   ::
